@@ -29,8 +29,6 @@ import com.android.services.telephony.common.Call;
 
 import android.os.Handler;
 import android.os.Message;
-import android.os.ServiceManager;
-import android.os.RemoteException;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -47,6 +45,7 @@ public final class AccelerometerListener {
 
     private SensorManager mSensorManager;
     private Sensor mSensor;
+    private ITelephony mTelephonyService;
 
     // mOrientation is the orientation value most recently reported to the client.
     private int mOrientation;
@@ -105,6 +104,7 @@ public final class AccelerometerListener {
     public AccelerometerListener(Context context){
         mSensorManager = (SensorManager)context.getSystemService(Context.SENSOR_SERVICE);
         mContext = context;
+        mTelephonyService = getTeleService();
     }
 
     public void enable(boolean enable) {
@@ -138,6 +138,25 @@ public final class AccelerometerListener {
                     mSensorManager.unregisterListener(mFlipListener);
                 }
             }
+        }
+    }
+
+    private ITelephony getTeleService() {
+        TelephonyManager tm = (TelephonyManager) mContext.getSystemService(Context.TELEPHONY_SERVICE);
+        try {
+            // Java reflection to gain access to TelephonyManager's
+            // ITelephony getter
+            Log.v(TAG, "Get getTeleService...");
+            Class c = Class.forName(tm.getClass().getName());
+            Method m = c.getDeclaredMethod("getITelephony");
+            m.setAccessible(true);
+            return (ITelephony) m.invoke(tm);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.e(TAG,
+                    "FATAL ERROR: could not connect to telephony subsystem");
+            Log.e(TAG, "Exception object: " + e);
+            return null;
         }
     }
 
@@ -280,11 +299,12 @@ public final class AccelerometerListener {
 
         switch(action) {
             case MUTE_RINGER:
-                try {
-                    ITelephony phone = ITelephony.Stub.asInterface(ServiceManager.checkService("phone"));
-                    phone.silenceRinger();
-                } catch (RemoteException e) {
-                    Log.d(TAG, e.toString());
+                if(mTelephonyService != null){
+                    try{
+                        mTelephonyService.silenceRinger();
+                    }catch(android.os.RemoteException e){
+                        Log.d(TAG, e.toString());
+                    }
                 }
                 break;
             case DISMISS_CALL:
